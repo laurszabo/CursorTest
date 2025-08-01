@@ -1,0 +1,53 @@
+{
+  "name": "cognirogue",
+  "version": "1.0.0",
+  "description": "CogniRogue - 8-bit Roguelike Game - A Cognizant Developer vs Programming Bugs",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-mac": "electron-builder --mac",
+    "build-linux": "electron-builder --linux",
+    "dist": "electron-builder --publish=never"
+  },
+  "keywords": ["game", "roguelike", "8-bit", "cognizant", "programming", "bugs"],
+  "author": "Cognizant Developer",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.cognizant.cognirogue",
+    "productName": "CogniRogue",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "game.js",
+      "style.css",
+      "electron-main.js",
+      "icon.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
