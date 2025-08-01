@@ -163,12 +163,93 @@ body {
     padding: 15px;
 }
 
+.weapons-title {
+    color: #ffff00;
+    font-size: 10px;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
 .weapon-slot {
     display: flex;
     justify-content: space-between;
-    margin: 5px 0;
-    font-size: 10px;
+    margin: 3px 0;
+    font-size: 9px;
     color: #ffff00;
+    padding: 2px 0;
+}
+
+.weapon-name {
+    color: #ffffff;
+}
+
+.weapon-level {
+    color: #00ff00;
+}
+
+/* Boss UI */
+.boss-ui {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.9);
+    border: 3px solid #ff4444;
+    padding: 20px;
+    z-index: 15;
+    box-shadow: 0 0 20px #ff4444;
+}
+
+.boss-title {
+    color: #ff4444;
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 0px #aa0000;
+    animation: pulse 1s infinite;
+}
+
+.boss-name {
+    color: #ffffff;
+    font-size: 12px;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.boss-health {
+    width: 200px;
+}
+
+.boss-health-bar {
+    width: 100%;
+    height: 8px;
+    background: #ff0000;
+    border: 1px solid #ffffff;
+    margin-bottom: 5px;
+}
+
+.boss-health-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff4444, #ff0000);
+    width: 100%;
+    transition: width 0.3s ease;
+}
+
+.boss-health-text {
+    color: #ffffff;
+    font-size: 10px;
+    text-align: center;
+}
+
+.boss-phase {
+    color: #ffff00;
+    font-size: 10px;
+    text-align: center;
+    margin-top: 10px;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 /* Level Up Screen */

@@ -19,7 +19,7 @@
             </div>
             
             <div class="story">
-                <p>You are a elite Cognizant developer.</p>
+                <p>You are an elite Cognizant developer.</p>
                 <p>The codebase has been infected with bugs!</p>
                 <p>Use your coding skills to debug them all.</p>
                 <p class="challenge">Survive the infinite bug swarm!</p>
@@ -66,12 +66,31 @@
                     <span class="label">TIME:</span>
                     <span id="gameTime">00:00</span>
                 </div>
+                <div class="stat">
+                    <span class="label">NEXT BOSS:</span>
+                    <span id="nextBoss">Level 5</span>
+                </div>
             </div>
             
-            <div class="weapons">
-                <div class="weapon-slot">
-                    <span class="weapon-name">Debug.log()</span>
-                    <span class="weapon-level">Lv.1</span>
+            </div>
+            
+            <!-- Boss UI (shown during boss fights) -->
+            <div class="boss-ui" id="bossUI" style="display: none;">
+                <div class="boss-title">BOSS FIGHT!</div>
+                <div class="boss-name" id="bossName">Syntax Overlord</div>
+                <div class="boss-health">
+                    <div class="boss-health-bar">
+                        <div class="boss-health-fill" id="bossHealthFill"></div>
+                    </div>
+                    <div class="boss-health-text" id="bossHealthText">300/300</div>
+                </div>
+                <div class="boss-phase" id="bossPhase" style="display: none;">Phase 1/3</div>
+            </div>
+            
+            <div class="weapons" style="display: none;" id="weaponsSection">
+                <div class="weapons-title">WEAPONS:</div>
+                <div id="weaponsList">
+                    <!-- Weapons will be populated by JavaScript -->
                 </div>
             </div>
         </div>

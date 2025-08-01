@@ -7,7 +7,7 @@ class CogniRogue {
         this.ctx = this.canvas.getContext('2d');
         this.ctx.imageSmoothingEnabled = false; // Pixel perfect rendering
         
-        this.gameState = 'title'; // title, playing, levelup, gameover
+        this.gameState = 'title'; // title, playing, levelup, gameover, boss, victory
         this.gameTime = 0;
         this.lastTime = 0;
         
@@ -15,6 +15,7 @@ class CogniRogue {
         this.bugs = [];
         this.projectiles = [];
         this.xpOrbs = [];
+        this.bosses = [];
         
         this.keys = {};
         this.setupEventListeners();
@@ -23,6 +24,16 @@ class CogniRogue {
         this.BUG_SPAWN_RATE = 60; // frames between spawns
         this.MAX_BUGS = 50;
         this.spawnCounter = 0;
+        
+        // Difficulty scaling
+        this.difficultyLevel = 1;
+        this.timeElapsed = 0;
+        this.nextBossLevel = 5;
+        this.currentBoss = null;
+        this.gameComplete = false;
+        
+        // Boss management
+        this.bossSpawned = false;
         
         this.gameLoop = this.gameLoop.bind(this);
     }
@@ -52,6 +63,7 @@ class CogniRogue {
         document.getElementById('titleScreen').style.display = 'none';
         document.getElementById('gameCanvas').style.display = 'block';
         document.getElementById('gameUI').style.display = 'block';
+        document.getElementById('weaponsSection').style.display = 'block';
         
         this.updateUI();
         requestAnimationFrame(this.gameLoop);
@@ -72,18 +84,36 @@ class CogniRogue {
     }
     
     update(deltaTime) {
+        // Update difficulty scaling
+        this.timeElapsed += deltaTime;
+        this.updateDifficulty();
+        
+        // Check for boss battles
+        if (this.player.level >= this.nextBossLevel && !this.currentBoss && !this.bossSpawned && this.gameState === 'playing') {
+            this.spawnBoss();
+        }
+        
         // Update player
         this.player.update(this.keys, this.canvas.width, this.canvas.height);
         
-        // Spawn bugs
+        // Spawn bugs (always spawn, even during boss battles)
         this.spawnCounter++;
-        if (this.spawnCounter >= this.BUG_SPAWN_RATE && this.bugs.length < this.MAX_BUGS) {
+        const currentSpawnRate = Math.max(20, this.BUG_SPAWN_RATE - Math.floor(this.difficultyLevel * 5));
+        if (this.spawnCounter >= currentSpawnRate && this.bugs.length < this.MAX_BUGS) {
             this.spawnBug();
             this.spawnCounter = 0;
         }
         
         // Update bugs
         this.bugs.forEach(bug => bug.update(this.player.x, this.player.y));
+        
+        // Update bosses
+        if (this.currentBoss) {
+            this.currentBoss.update(this.player.x, this.player.y, this);
+            if (this.currentBoss.hp <= 0) {
+                this.defeatBoss();
+            }
+        }
         
         // Update projectiles
         this.projectiles.forEach(projectile => projectile.update());
@@ -92,7 +122,9 @@ class CogniRogue {
         this.xpOrbs.forEach(orb => orb.update(this.player.x, this.player.y));
         
         // Auto-attack system
-        this.player.attack(this.bugs, this.projectiles);
+        const allEnemies = [...this.bugs];
+        if (this.currentBoss) allEnemies.push(this.currentBoss);
+        this.player.attack(allEnemies, this.projectiles);
         
         // Collision detection
         this.checkCollisions();
@@ -104,6 +136,59 @@ class CogniRogue {
         if (this.player.hp <= 0) {
             this.gameOver();
         }
+        
+        // Check victory condition (defeat Git Boss)
+        if (this.gameComplete) {
+            this.victory();
+        }
+    }
+    
+    updateDifficulty() {
+        // Increase difficulty every 30 seconds
+        const newDifficultyLevel = Math.floor(this.timeElapsed / 30000) + 1;
+        if (newDifficultyLevel > this.difficultyLevel) {
+            this.difficultyLevel = newDifficultyLevel;
+            // Increase max bugs and spawn rate
+            this.MAX_BUGS = Math.min(100, 50 + this.difficultyLevel * 5);
+        }
+    }
+    
+    spawnBoss() {
+        this.bossSpawned = true;
+        
+        // Create boss based on level (more bosses for extended gameplay)
+        if (this.nextBossLevel === 5) {
+            this.currentBoss = new Boss(this.canvas.width / 2, 100, 'SyntaxBoss', this.difficultyLevel);
+        } else if (this.nextBossLevel === 10) {
+            this.currentBoss = new Boss(this.canvas.width / 2, 100, 'LogicBoss', this.difficultyLevel);
+        } else if (this.nextBossLevel === 15) {
+            this.currentBoss = new Boss(this.canvas.width / 2, 100, 'MemoryBoss', this.difficultyLevel);
+        } else if (this.nextBossLevel === 20) {
+            this.currentBoss = new Boss(this.canvas.width / 2, 100, 'NetworkBoss', this.difficultyLevel);
+        } else if (this.nextBossLevel === 25) {
+            this.currentBoss = new Boss(this.canvas.width / 2, 100, 'SecurityBoss', this.difficultyLevel);
+        } else if (this.nextBossLevel === 30) {
+            this.currentBoss = new Boss(this.canvas.width / 2, 100, 'GitBoss', this.difficultyLevel);
+        }
+    }
+    
+    defeatBoss() {
+        // Boss defeated - give massive XP reward
+        const bossXP = this.nextBossLevel * 100;
+        this.player.gainXP(bossXP);
+        this.xpOrbs.push(new XPOrb(this.currentBoss.x, this.currentBoss.y, bossXP));
+        
+        // Check if this was the final boss (Git Boss at level 30)
+        if (this.nextBossLevel === 30) {
+            this.gameComplete = true;
+            return;
+        }
+        
+        // Prepare for next boss
+        this.nextBossLevel += 5;
+        this.currentBoss = null;
+        this.bossSpawned = false;
+        this.updateUI();
     }
     
     render() {
@@ -122,6 +207,11 @@ class CogniRogue {
         
         // Draw bugs
         this.bugs.forEach(bug => bug.render(this.ctx));
+        
+        // Draw boss
+        if (this.currentBoss) {
+            this.currentBoss.render(this.ctx);
+        }
         
         // Draw projectiles
         this.projectiles.forEach(projectile => projectile.render(this.ctx));
@@ -186,13 +276,14 @@ class CogniRogue {
         const bugTypes = ['SyntaxError', 'NullPointer', 'LogicBug', 'MemoryLeak'];
         const bugType = bugTypes[Math.floor(Math.random() * bugTypes.length)];
         
-        this.bugs.push(new Bug(x, y, bugType));
+        this.bugs.push(new Bug(x, y, bugType, this.difficultyLevel));
     }
     
     checkCollisions() {
         // Projectile vs Bug collisions
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const projectile = this.projectiles[i];
+            let projectileHit = false;
             
             for (let j = this.bugs.length - 1; j >= 0; j--) {
                 const bug = this.bugs[j];
@@ -201,8 +292,23 @@ class CogniRogue {
                     // Damage bug
                     bug.takeDamage(projectile.damage);
                     
-                    // Remove projectile
-                    this.projectiles.splice(i, 1);
+                    // Handle area damage explosion
+                    if (projectile.type === 'area') {
+                        // Damage nearby bugs
+                        this.bugs.forEach(nearbyBug => {
+                            const dx = nearbyBug.x - projectile.x;
+                            const dy = nearbyBug.y - projectile.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < 40 && nearbyBug !== bug) {
+                                nearbyBug.takeDamage(projectile.damage * 0.5);
+                            }
+                        });
+                    }
+                    
+                    // Handle projectile behavior on hit
+                    projectile.onHit();
+                    projectileHit = true;
                     
                     // If bug dies, create XP orb and update stats
                     if (bug.hp <= 0) {
@@ -211,8 +317,17 @@ class CogniRogue {
                         this.player.bugsKilled++;
                         this.updateUI();
                     }
-                    break;
+                    
+                    // Break if projectile is dead (not piercing)
+                    if (projectile.isDead) {
+                        break;
+                    }
                 }
+            }
+            
+            // Remove dead projectile
+            if (projectile.isDead) {
+                this.projectiles.splice(i, 1);
             }
         }
         
@@ -227,6 +342,47 @@ class CogniRogue {
                 }
             }
         });
+        
+        // Player vs Boss collisions
+        if (this.currentBoss && this.circleCollision(this.player, this.currentBoss)) {
+            if (this.currentBoss.lastDamageTime + 1000 < Date.now()) {
+                this.player.takeDamage(this.currentBoss.damage);
+                this.currentBoss.lastDamageTime = Date.now();
+                this.updateUI();
+            }
+        }
+        
+        // Projectile vs Boss collisions
+        if (this.currentBoss) {
+            for (let i = this.projectiles.length - 1; i >= 0; i--) {
+                const projectile = this.projectiles[i];
+                
+                if (this.circleCollision(projectile, this.currentBoss)) {
+                    this.currentBoss.takeDamage(projectile.damage);
+                    
+                    // Handle area damage explosion on boss
+                    if (projectile.type === 'area') {
+                        // Damage nearby bugs too
+                        this.bugs.forEach(nearbyBug => {
+                            const dx = nearbyBug.x - projectile.x;
+                            const dy = nearbyBug.y - projectile.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < 40) {
+                                nearbyBug.takeDamage(projectile.damage * 0.5);
+                            }
+                        });
+                    }
+                    
+                    projectile.onHit();
+                    
+                    if (projectile.isDead) {
+                        this.projectiles.splice(i, 1);
+                    }
+                    break;
+                }
+            }
+        }
         
         // Player vs XP Orb collisions
         for (let i = this.xpOrbs.length - 1; i >= 0; i--) {
@@ -273,35 +429,147 @@ class CogniRogue {
         
         options.innerHTML = '';
         
-        const upgrades = [
+        const baseUpgrades = [
             {
-                title: 'Increased Debug Speed',
+                title: 'Rapid Fire Protocol',
                 description: 'Attack speed +20%',
                 effect: () => this.player.attackSpeed *= 1.2
             },
             {
+                title: 'Multi-threading',
+                description: 'Attack speed +35%',
+                effect: () => this.player.attackSpeed *= 1.35
+            },
+            {
                 title: 'Better Error Handling',
-                description: 'Max HP +20, Full heal',
+                description: 'Max HP +30, Full heal',
                 effect: () => {
-                    this.player.maxHp += 20;
+                    this.player.maxHp += 30;
                     this.player.hp = this.player.maxHp;
                 }
             },
             {
                 title: 'Code Optimization',
-                description: 'Movement speed +15%',
-                effect: () => this.player.speed *= 1.15
+                description: 'Movement speed +20%',
+                effect: () => this.player.speed *= 1.2
             },
             {
                 title: 'Enhanced Debugging',
-                description: 'Damage +25%',
-                effect: () => this.player.damage *= 1.25
+                description: 'Base damage +30%',
+                effect: () => this.player.damage *= 1.3
+            },
+            {
+                title: 'Extended Range',
+                description: 'Attack range +40%',
+                effect: () => this.player.attackRange *= 1.4
+            },
+            {
+                title: 'XP Magnet Boost',
+                description: 'XP collection +25% faster + wider range',
+                effect: () => {
+                    // Boost all XP orbs
+                    this.xpOrbs.forEach(orb => {
+                        orb.magnetDistance *= 1.25;
+                        orb.speed *= 1.25;
+                    });
+                }
+            },
+            {
+                title: 'Defensive Protocols',
+                description: 'Take 15% less damage from all sources',
+                effect: () => {
+                    // Add damage reduction (we'll need to modify takeDamage)
+                    if (!this.player.damageReduction) this.player.damageReduction = 0;
+                    this.player.damageReduction += 0.15;
+                }
             }
         ];
         
-        // Show 3 random upgrades
-        const shuffled = upgrades.sort(() => 0.5 - Math.random());
-        const selected = shuffled.slice(0, 3);
+        // Weapon unlock upgrades
+        const weaponUnlocks = [];
+        
+        if (!this.player.unlockedWeapons.includes('Console.trace()') && this.player.level >= 3) {
+            weaponUnlocks.push({
+                title: 'Unlock Console.trace()',
+                description: 'Piercing debugger that goes through multiple bugs',
+                effect: () => this.player.unlockWeapon('Console.trace()')
+            });
+        }
+        
+        if (!this.player.unlockedWeapons.includes('Array.spread()') && this.player.level >= 5) {
+            weaponUnlocks.push({
+                title: 'Unlock Array.spread()',
+                description: 'Spread shot fires 3 projectiles at once',
+                effect: () => this.player.unlockWeapon('Array.spread()')
+            });
+        }
+        
+        if (!this.player.unlockedWeapons.includes('Exception.throw()') && this.player.level >= 7) {
+            weaponUnlocks.push({
+                title: 'Unlock Exception.throw()',
+                description: 'Area damage explosive debugging',
+                effect: () => this.player.unlockWeapon('Exception.throw()')
+            });
+        }
+        
+        if (!this.player.unlockedWeapons.includes('Promise.resolve()') && this.player.level >= 10) {
+            weaponUnlocks.push({
+                title: 'Unlock Promise.resolve()',
+                description: 'High-speed async debugging tool',
+                effect: () => this.player.unlockWeapon('Promise.resolve()')
+            });
+        }
+        
+        // Weapon upgrade options
+        const weaponUpgrades = [];
+        this.player.weapons.forEach(weapon => {
+            if (weapon.level < 10) {
+                weaponUpgrades.push({
+                    title: `Upgrade ${weapon.name}`,
+                    description: `Level ${weapon.level} → ${weapon.level + 1} (+25% damage, +10% speed)`,
+                    effect: () => this.player.upgradeWeapon(weapon.name)
+                });
+            }
+        });
+        
+        // Smart balancing: ensure diverse upgrade types
+        const selected = [];
+        const lastUpgrades = this.lastUpgradeTypes || [];
+        
+        // Prioritize weapon unlocks early game
+        if (weaponUnlocks.length > 0 && this.player.level <= 15) {
+            selected.push(weaponUnlocks[Math.floor(Math.random() * weaponUnlocks.length)]);
+        }
+        
+        // Filter out attack speed upgrades if we had one recently
+        let availableBase = baseUpgrades;
+        if (lastUpgrades.includes('attack_speed')) {
+            availableBase = baseUpgrades.filter(upgrade => 
+                !upgrade.title.includes('Fire') && !upgrade.title.includes('threading')
+            );
+        }
+        
+        // Add one stat upgrade, avoiding recent types
+        const shuffledBase = availableBase.sort(() => 0.5 - Math.random());
+        if (shuffledBase.length > 0) {
+            selected.push(shuffledBase[0]);
+        }
+        
+        // Fill remaining slots with diverse options
+        const remaining = [...baseUpgrades, ...weaponUnlocks, ...weaponUpgrades]
+            .filter(upgrade => !selected.includes(upgrade));
+        
+        while (selected.length < 3 && remaining.length > 0) {
+            const randomIndex = Math.floor(Math.random() * remaining.length);
+            selected.push(remaining.splice(randomIndex, 1)[0]);
+        }
+        
+        // Track upgrade types for next level
+        this.lastUpgradeTypes = selected.map(upgrade => {
+            if (upgrade.title.includes('Fire') || upgrade.title.includes('threading')) return 'attack_speed';
+            if (upgrade.title.includes('damage') || upgrade.title.includes('Debugging')) return 'damage';
+            return 'other';
+        });
         
         selected.forEach(upgrade => {
             const option = document.createElement('div');
@@ -331,6 +599,28 @@ class CogniRogue {
         document.getElementById('gameOverScreen').style.display = 'block';
     }
     
+    victory() {
+        this.gameState = 'victory';
+        
+        document.getElementById('finalLevel').textContent = this.player.level;
+        document.getElementById('finalBugs').textContent = this.player.bugsKilled;
+        document.getElementById('finalTime').textContent = this.formatTime(this.gameTime);
+        
+        // Show victory screen (we'll reuse game over screen but change the message)
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const title = gameOverScreen.querySelector('h2');
+        title.textContent = 'GIT MERGE SUCCESSFUL!';
+        title.style.color = '#00ff00';
+        
+        // Add victory message
+        const statsDiv = gameOverScreen.querySelector('.final-stats');
+        const victoryMessage = document.createElement('p');
+        victoryMessage.innerHTML = '<br/><span style="color: #ffff00;">🎉 CONGRATULATIONS! 🎉</span><br/><br/>You have successfully debugged the Git Merge Conflict!<br/>The codebase is now clean and all bugs are eliminated.<br/>You are truly an elite Cognizant developer!';
+        statsDiv.appendChild(victoryMessage);
+        
+        gameOverScreen.style.display = 'block';
+    }
+    
     updateUI() {
         document.getElementById('playerLevel').textContent = this.player.level;
         document.getElementById('playerXP').textContent = Math.floor(this.player.xp);
@@ -338,6 +628,49 @@ class CogniRogue {
         document.getElementById('playerHP').textContent = Math.floor(this.player.hp);
         document.getElementById('maxHP').textContent = this.player.maxHp;
         document.getElementById('bugsKilled').textContent = this.player.bugsKilled;
+        
+        // Update next boss info
+        if (this.gameComplete) {
+            document.getElementById('nextBoss').textContent = 'COMPLETE!';
+        } else {
+            document.getElementById('nextBoss').textContent = `Level ${this.nextBossLevel}`;
+        }
+        
+        // Update boss UI
+        const bossUI = document.getElementById('bossUI');
+        if (this.currentBoss) {
+            bossUI.style.display = 'block';
+            document.getElementById('bossName').textContent = this.currentBoss.name;
+            
+            const healthPercent = (this.currentBoss.hp / this.currentBoss.maxHp) * 100;
+            document.getElementById('bossHealthFill').style.width = healthPercent + '%';
+            document.getElementById('bossHealthText').textContent = `${this.currentBoss.hp}/${this.currentBoss.maxHp}`;
+            
+            // Show phase for Git Boss
+            const phaseElement = document.getElementById('bossPhase');
+            if (this.currentBoss.type === 'GitBoss') {
+                phaseElement.style.display = 'block';
+                phaseElement.textContent = `Phase ${this.currentBoss.phase}/3`;
+            } else {
+                phaseElement.style.display = 'none';
+            }
+        } else {
+            bossUI.style.display = 'none';
+        }
+        
+        // Update weapons display
+        const weaponsList = document.getElementById('weaponsList');
+        weaponsList.innerHTML = '';
+        
+        this.player.weapons.forEach(weapon => {
+            const weaponDiv = document.createElement('div');
+            weaponDiv.className = 'weapon-slot';
+            weaponDiv.innerHTML = `
+                <span class="weapon-name">${weapon.name}</span>
+                <span class="weapon-level">Lv.${weapon.level}</span>
+            `;
+            weaponsList.appendChild(weaponDiv);
+        });
     }
     
     updateGameTime() {
@@ -366,11 +699,25 @@ class Player {
         this.xpToNext = 100;
         this.bugsKilled = 0;
         
-        // Combat stats
+        // Combat stats (rebalanced for proper 3-shot kills early game)
         this.damage = 25;
-        this.attackSpeed = 1.0; // attacks per second
+        this.attackSpeed = 1.2; // attacks per second
         this.lastAttackTime = 0;
         this.attackRange = 150;
+        
+        // Weapon system
+        this.weapons = [
+            {
+                name: 'Debug.log()',
+                level: 1,
+                damage: 25,
+                speed: 1.0,
+                type: 'single',
+                color: '#00ffff',
+                unlocked: true
+            }
+        ];
+        this.unlockedWeapons = ['Debug.log()'];
     }
     
     update(keys, canvasWidth, canvasHeight) {
@@ -398,28 +745,131 @@ class Player {
     
     attack(bugs, projectiles) {
         const now = Date.now();
-        if (now - this.lastAttackTime < (1000 / this.attackSpeed)) return;
         
-        // Find closest bug within range
-        let closestBug = null;
-        let closestDistance = this.attackRange;
-        
-        bugs.forEach(bug => {
-            const dx = bug.x - this.x;
-            const dy = bug.y - this.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+        // Attack with each weapon independently
+        this.weapons.forEach(weapon => {
+            // Initialize weapon last attack time if not set
+            if (!weapon.lastAttackTime) weapon.lastAttackTime = 0;
             
-            if (distance < closestDistance) {
-                closestBug = bug;
-                closestDistance = distance;
-            }
+            // Check if weapon is ready to fire
+            if (now - weapon.lastAttackTime < (1000 / (this.attackSpeed * weapon.speed))) return;
+            
+            // Fire weapon regardless of targets (constant firing)
+            this.fireWeapon(weapon, bugs, projectiles);
+            weapon.lastAttackTime = now;
         });
+    }
+    
+    findTargets(bugs, weapon) {
+        switch(weapon.type) {
+            case 'single':
+                // Find closest bug
+                let closestBug = null;
+                let closestDistance = this.attackRange;
+                
+                bugs.forEach(bug => {
+                    const dx = bug.x - this.x;
+                    const dy = bug.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < closestDistance) {
+                        closestBug = bug;
+                        closestDistance = distance;
+                    }
+                });
+                
+                return closestBug ? [closestBug] : [];
+                
+            case 'spread':
+                // Find multiple bugs for spread shot
+                return bugs.filter(bug => {
+                    const dx = bug.x - this.x;
+                    const dy = bug.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    return distance < this.attackRange;
+                }).slice(0, 3);
+                
+            case 'piercing':
+                // Find bugs in a line
+                return bugs.filter(bug => {
+                    const dx = bug.x - this.x;
+                    const dy = bug.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    return distance < this.attackRange * 1.5;
+                }).slice(0, 1);
+                
+            case 'area':
+                // Find closest bug for area damage
+                let closestForArea = null;
+                let closestDistanceArea = this.attackRange;
+                
+                bugs.forEach(bug => {
+                    const dx = bug.x - this.x;
+                    const dy = bug.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < closestDistanceArea) {
+                        closestForArea = bug;
+                        closestDistanceArea = distance;
+                    }
+                });
+                
+                return closestForArea ? [closestForArea] : [];
+                
+            default:
+                return [];
+        }
+    }
+    
+    fireWeapon(weapon, bugs, projectiles) {
+        // Find targets for this weapon
+        const targets = this.findTargets(bugs, weapon);
         
-        if (closestBug) {
-            // Create projectile towards closest bug
-            const angle = Math.atan2(closestBug.y - this.y, closestBug.x - this.x);
-            projectiles.push(new Projectile(this.x, this.y, angle, this.damage));
-            this.lastAttackTime = now;
+        // If we have targets, fire at them, otherwise fire in a random direction
+        let angle;
+        if (targets.length > 0) {
+            angle = Math.atan2(targets[0].y - this.y, targets[0].x - this.x);
+        } else {
+            // Fire in random direction for constant firing
+            angle = Math.random() * Math.PI * 2;
+        }
+        
+        switch(weapon.type) {
+            case 'single':
+                projectiles.push(new Projectile(
+                    this.x, this.y, angle, 
+                    weapon.damage, 
+                    weapon.type, weapon.color
+                ));
+                break;
+                
+            case 'spread':
+                // Fire 3 projectiles in a spread
+                for (let i = -1; i <= 1; i++) {
+                    const spreadAngle = angle + (i * 0.3);
+                    projectiles.push(new Projectile(
+                        this.x, this.y, spreadAngle,
+                        weapon.damage * 0.8, 
+                        weapon.type, weapon.color
+                    ));
+                }
+                break;
+                
+            case 'piercing':
+                projectiles.push(new Projectile(
+                    this.x, this.y, angle,
+                    weapon.damage,
+                    weapon.type, weapon.color
+                ));
+                break;
+                
+            case 'area':
+                projectiles.push(new Projectile(
+                    this.x, this.y, angle,
+                    weapon.damage,
+                    weapon.type, weapon.color
+                ));
+                break;
         }
     }
     
@@ -435,7 +885,65 @@ class Player {
     levelUp() {
         this.level++;
         this.xp -= this.xpToNext;
-        this.xpToNext = Math.floor(this.xpToNext * 1.2);
+        this.xpToNext = Math.floor(this.xpToNext * 1.15); // 25% faster leveling (reduced from 1.2 to 1.15)
+    }
+    
+    unlockWeapon(weaponName) {
+        if (!this.unlockedWeapons.includes(weaponName)) {
+            this.unlockedWeapons.push(weaponName);
+            
+            const weaponConfigs = {
+                'Console.trace()': {
+                    name: 'Console.trace()',
+                    level: 1,
+                    damage: 35,
+                    speed: 0.8,
+                    type: 'piercing',
+                    color: '#ff9900',
+                    unlocked: true
+                },
+                'Exception.throw()': {
+                    name: 'Exception.throw()',
+                    level: 1,
+                    damage: 50,
+                    speed: 0.6,
+                    type: 'area',
+                    color: '#ff4444',
+                    unlocked: true
+                },
+                'Array.spread()': {
+                    name: 'Array.spread()',
+                    level: 1,
+                    damage: 22,
+                    speed: 1.2,
+                    type: 'spread',
+                    color: '#44ff44',
+                    unlocked: true
+                },
+                'Promise.resolve()': {
+                    name: 'Promise.resolve()',
+                    level: 1,
+                    damage: 30,
+                    speed: 1.5,
+                    type: 'single',
+                    color: '#ff44ff',
+                    unlocked: true
+                }
+            };
+            
+            if (weaponConfigs[weaponName]) {
+                this.weapons.push(weaponConfigs[weaponName]);
+            }
+        }
+    }
+    
+    upgradeWeapon(weaponName) {
+        const weapon = this.weapons.find(w => w.name === weaponName);
+        if (weapon) {
+            weapon.level++;
+            weapon.damage = Math.floor(weapon.damage * 1.25);
+            weapon.speed *= 1.1;
+        }
     }
     
     render(ctx) {
@@ -491,42 +999,46 @@ class Player {
 
 // Bug Classes - The Programming Enemies
 class Bug {
-    constructor(x, y, type) {
+    constructor(x, y, type, difficultyLevel = 1) {
         this.x = x;
         this.y = y;
         this.type = type;
         this.radius = 12;
         this.lastDamageTime = 0;
         
-        // Set stats based on bug type
+        // Balanced stats for 3-shot kills early game, scaling with difficulty
+        const hpMultiplier = 1 + (difficultyLevel - 1) * 0.4; // Less aggressive scaling
+        const damageMultiplier = 1 + (difficultyLevel - 1) * 0.15;
+        
+        // Set stats based on bug type (LOW HP for easy 2-3 shot kills)
         switch(type) {
             case 'SyntaxError':
-                this.hp = 30;
+                this.hp = Math.floor(50 * hpMultiplier); // 2 shots at 25 damage
                 this.speed = 1.5;
-                this.damage = 15;
+                this.damage = Math.floor(12 * damageMultiplier);
                 this.color = '#ff4444';
-                this.xpValue = 10;
+                this.xpValue = Math.floor(10 * (1 + difficultyLevel * 0.1));
                 break;
             case 'NullPointer':
-                this.hp = 50;
+                this.hp = Math.floor(65 * hpMultiplier); // 3 shots at 25 damage
                 this.speed = 1.0;
-                this.damage = 25;
+                this.damage = Math.floor(18 * damageMultiplier);
                 this.color = '#4444ff';
-                this.xpValue = 20;
+                this.xpValue = Math.floor(15 * (1 + difficultyLevel * 0.1));
                 break;
             case 'LogicBug':
-                this.hp = 40;
+                this.hp = Math.floor(60 * hpMultiplier); // 2-3 shots at 25 damage
                 this.speed = 2.0;
-                this.damage = 20;
+                this.damage = Math.floor(15 * damageMultiplier);
                 this.color = '#ff44ff';
-                this.xpValue = 15;
+                this.xpValue = Math.floor(12 * (1 + difficultyLevel * 0.1));
                 break;
             case 'MemoryLeak':
-                this.hp = 80;
+                this.hp = Math.floor(75 * hpMultiplier); // 3 shots at 25 damage
                 this.speed = 0.8;
-                this.damage = 30;
+                this.damage = Math.floor(20 * damageMultiplier);
                 this.color = '#ffff44';
-                this.xpValue = 35;
+                this.xpValue = Math.floor(25 * (1 + difficultyLevel * 0.1));
                 break;
         }
         this.maxHp = this.hp;
@@ -604,15 +1116,19 @@ class Bug {
 
 // Projectile Class - Debug Commands
 class Projectile {
-    constructor(x, y, angle, damage) {
+    constructor(x, y, angle, damage, type = 'single', color = '#00ffff') {
         this.x = x;
         this.y = y;
         this.angle = angle;
-        this.speed = 8;
+        this.speed = type === 'piercing' ? 12 : 8;
         this.damage = damage;
-        this.radius = 3;
+        this.radius = type === 'area' ? 5 : 3;
         this.isDead = false;
-        this.lifeTime = 120; // frames
+        this.lifeTime = type === 'piercing' ? 180 : 120; // frames
+        this.type = type;
+        this.color = color;
+        this.pierceCount = type === 'piercing' ? 3 : 0;
+        this.hasExploded = false;
     }
     
     update() {
@@ -625,15 +1141,56 @@ class Projectile {
         }
     }
     
+    onHit() {
+        if (this.type === 'piercing') {
+            this.pierceCount--;
+            if (this.pierceCount <= 0) {
+                this.isDead = true;
+            }
+        } else if (this.type === 'area') {
+            this.explode();
+        } else {
+            this.isDead = true;
+        }
+    }
+    
+    explode() {
+        this.hasExploded = true;
+        this.isDead = true;
+        // Area damage will be handled in collision detection
+    }
+    
     render(ctx) {
         ctx.save();
-        ctx.fillStyle = '#00ffff';
-        ctx.shadowColor = '#00ffff';
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
         ctx.shadowBlur = 5;
         
-        // Debug projectile (looks like a small code snippet)
-        ctx.fillRect(this.x - 3, this.y - 1, 6, 2);
-        ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
+        switch(this.type) {
+            case 'single':
+                // Standard projectile
+                ctx.fillRect(this.x - 3, this.y - 1, 6, 2);
+                ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
+                break;
+                
+            case 'spread':
+                // Smaller spread projectiles
+                ctx.fillRect(this.x - 2, this.y - 1, 4, 2);
+                break;
+                
+            case 'piercing':
+                // Longer piercing projectile
+                ctx.fillRect(this.x - 4, this.y - 1, 8, 2);
+                ctx.fillRect(this.x - 3, this.y - 2, 6, 4);
+                break;
+                
+            case 'area':
+                // Area damage projectile
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+        }
         
         ctx.restore();
     }
@@ -645,10 +1202,11 @@ class XPOrb {
         this.x = x;
         this.y = y;
         this.value = value;
-        this.radius = 4;
+        this.radius = 8; // Pickup radius stays the same
+        this.visualRadius = 6; // 20% smaller visual (was ~7.5, rounded to 6)
         this.lifeTime = 600; // frames
-        this.magnetDistance = 80;
-        this.speed = 3;
+        this.magnetDistance = 150; // Much larger attraction range
+        this.speed = 4; // Slightly faster attraction
     }
     
     update(playerX, playerY) {
@@ -671,10 +1229,359 @@ class XPOrb {
         ctx.shadowColor = '#ffff00';
         ctx.shadowBlur = 3;
         
-        // XP orb (glowing yellow)
+        // XP orb (glowing yellow) - using smaller visual radius
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.visualRadius, 0, Math.PI * 2);
         ctx.fill();
+        
+        ctx.restore();
+    }
+}
+
+// Boss Class - Epic Bug Bosses
+class Boss {
+    constructor(x, y, type, difficultyLevel = 1) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.radius = 40;
+        this.lastDamageTime = 0;
+        this.lastAttackTime = 0;
+        this.attackCooldown = 3000; // 3 seconds between attacks
+        
+        // Boss stats scale heavily with difficulty
+        const hpMultiplier = 1 + (difficultyLevel - 1) * 0.5;
+        const damageMultiplier = 1 + (difficultyLevel - 1) * 0.3;
+        
+        // Set stats based on boss type (reasonable HP for boss battles)
+        switch(type) {
+            case 'SyntaxBoss':
+                this.hp = Math.floor(300 * hpMultiplier); // ~12 shots early game
+                this.speed = 0.5;
+                this.damage = Math.floor(20 * damageMultiplier);
+                this.color = '#ff0000';
+                this.xpValue = 200;
+                this.name = 'Syntax Overlord';
+                break;
+            case 'LogicBoss':
+                this.hp = Math.floor(450 * hpMultiplier); // ~18 shots early game
+                this.speed = 0.7;
+                this.damage = Math.floor(25 * damageMultiplier);
+                this.color = '#ff00ff';
+                this.xpValue = 400;
+                this.name = 'Logic Destroyer';
+                break;
+            case 'MemoryBoss':
+                this.hp = Math.floor(600 * hpMultiplier); // ~24 shots early game
+                this.speed = 0.4;
+                this.damage = Math.floor(30 * damageMultiplier);
+                this.color = '#ffff00';
+                this.xpValue = 600;
+                this.name = 'Memory Corruptor';
+                break;
+            case 'NetworkBoss':
+                this.hp = Math.floor(750 * hpMultiplier); // ~30 shots early game
+                this.speed = 0.8;
+                this.damage = Math.floor(32 * damageMultiplier);
+                this.color = '#00ffff';
+                this.xpValue = 800;
+                this.name = 'Network Timeout';
+                break;
+            case 'SecurityBoss':
+                this.hp = Math.floor(900 * hpMultiplier); // ~36 shots early game
+                this.speed = 0.3;
+                this.damage = Math.floor(35 * damageMultiplier);
+                this.color = '#ff8800';
+                this.xpValue = 1000;
+                this.name = 'Security Breach';
+                break;
+            case 'GitBoss':
+                this.hp = Math.floor(1200 * hpMultiplier); // ~48 shots early game (challenging but doable)
+                this.speed = 0.6;
+                this.damage = Math.floor(40 * damageMultiplier);
+                this.color = '#ff6600';
+                this.xpValue = 1500;
+                this.name = 'Git Merge Conflict';
+                this.phase = 1;
+                this.maxPhases = 3;
+                break;
+        }
+        this.maxHp = this.hp;
+        
+        // Movement pattern
+        this.movePattern = 0;
+        this.moveCounter = 0;
+    }
+    
+    update(playerX, playerY) {
+        // Special movement patterns for bosses
+        this.moveCounter++;
+        
+        if (this.type === 'GitBoss') {
+            this.updateGitBoss(playerX, playerY);
+        } else {
+            this.updateStandardBoss(playerX, playerY);
+        }
+        
+        // Boss attacks
+        this.attemptAttack(playerX, playerY, game);
+    }
+    
+    updateStandardBoss(playerX, playerY) {
+        // Circular movement pattern
+        if (this.moveCounter % 120 < 60) {
+            // Move towards player
+            const dx = playerX - this.x;
+            const dy = playerY - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0) {
+                this.x += (dx / distance) * this.speed;
+                this.y += (dy / distance) * this.speed;
+            }
+        } else {
+            // Circle around player
+            const angle = (this.moveCounter * 0.05) % (Math.PI * 2);
+            const centerX = playerX;
+            const centerY = playerY;
+            const orbitalRadius = 200;
+            
+            this.x = centerX + Math.cos(angle) * orbitalRadius;
+            this.y = centerY + Math.sin(angle) * orbitalRadius;
+        }
+    }
+    
+    updateGitBoss(playerX, playerY) {
+        // Git Boss has multiple phases
+        const healthPercent = this.hp / this.maxHp;
+        
+        if (healthPercent > 0.66) {
+            this.phase = 1;
+            // Phase 1: Slow pursuit
+            const dx = playerX - this.x;
+            const dy = playerY - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0) {
+                this.x += (dx / distance) * this.speed * 0.5;
+                this.y += (dy / distance) * this.speed * 0.5;
+            }
+        } else if (healthPercent > 0.33) {
+            this.phase = 2;
+            // Phase 2: Erratic movement
+            if (this.moveCounter % 60 === 0) {
+                this.targetX = Math.random() * 1200;
+                this.targetY = Math.random() * 800;
+            }
+            
+            const dx = this.targetX - this.x;
+            const dy = this.targetY - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 5) {
+                this.x += (dx / distance) * this.speed * 2;
+                this.y += (dy / distance) * this.speed * 2;
+            }
+        } else {
+            this.phase = 3;
+            // Phase 3: Desperate charge
+            const dx = playerX - this.x;
+            const dy = playerY - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0) {
+                this.x += (dx / distance) * this.speed * 3;
+                this.y += (dy / distance) * this.speed * 3;
+            }
+        }
+    }
+    
+    attemptAttack(playerX, playerY, game) {
+        const now = Date.now();
+        if (now - this.lastAttackTime > this.attackCooldown) {
+            this.performSpecialAttack(playerX, playerY, game);
+            this.lastAttackTime = now;
+        }
+    }
+    
+    performSpecialAttack(playerX, playerY, game) {
+        // Different special attacks for different boss types
+        switch(this.type) {
+            case 'SyntaxBoss':
+                // Spawn 2 small syntax errors
+                for (let i = 0; i < 2; i++) {
+                    const angle = (Math.PI * 2 * i) / 2;
+                    const spawnX = this.x + Math.cos(angle) * 60;
+                    const spawnY = this.y + Math.sin(angle) * 60;
+                    if (game && game.bugs) {
+                        game.bugs.push(new Bug(spawnX, spawnY, 'SyntaxError', Math.floor(game.difficultyLevel * 0.5)));
+                    }
+                }
+                break;
+                
+            case 'LogicBoss':
+                // Spawn 3 logic bugs in triangle formation
+                for (let i = 0; i < 3; i++) {
+                    const angle = (Math.PI * 2 * i) / 3;
+                    const spawnX = this.x + Math.cos(angle) * 80;
+                    const spawnY = this.y + Math.sin(angle) * 80;
+                    if (game && game.bugs) {
+                        game.bugs.push(new Bug(spawnX, spawnY, 'LogicBug', Math.floor(game.difficultyLevel * 0.7)));
+                    }
+                }
+                break;
+                
+            case 'MemoryBoss':
+                // Spawn 1 big memory leak
+                const spawnX = this.x + (Math.random() - 0.5) * 100;
+                const spawnY = this.y + (Math.random() - 0.5) * 100;
+                if (game && game.bugs) {
+                    game.bugs.push(new Bug(spawnX, spawnY, 'MemoryLeak', game.difficultyLevel));
+                }
+                break;
+                
+            case 'NetworkBoss':
+                // Spawn 4 bugs around the edges
+                for (let i = 0; i < 4; i++) {
+                    const angle = (Math.PI * 2 * i) / 4;
+                    const spawnX = this.x + Math.cos(angle) * 100;
+                    const spawnY = this.y + Math.sin(angle) * 100;
+                    if (game && game.bugs) {
+                        game.bugs.push(new Bug(spawnX, spawnY, 'NullPointer', Math.floor(game.difficultyLevel * 0.8)));
+                    }
+                }
+                break;
+                
+            case 'SecurityBoss':
+                // Spawn 2 strong bugs
+                for (let i = 0; i < 2; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spawnX = this.x + Math.cos(angle) * 70;
+                    const spawnY = this.y + Math.sin(angle) * 70;
+                    if (game && game.bugs) {
+                        const bugType = Math.random() < 0.5 ? 'MemoryLeak' : 'LogicBug';
+                        game.bugs.push(new Bug(spawnX, spawnY, bugType, game.difficultyLevel));
+                    }
+                }
+                break;
+                
+            case 'GitBoss':
+                // Different attacks per phase
+                if (this.phase === 1) {
+                    // Phase 1: Spawn 2 syntax errors
+                    for (let i = 0; i < 2; i++) {
+                        const angle = (Math.PI * 2 * i) / 2;
+                        const spawnX = this.x + Math.cos(angle) * 80;
+                        const spawnY = this.y + Math.sin(angle) * 80;
+                        if (game && game.bugs) {
+                            game.bugs.push(new Bug(spawnX, spawnY, 'SyntaxError', game.difficultyLevel));
+                        }
+                    }
+                } else if (this.phase === 2) {
+                    // Phase 2: Spawn 3 mixed bugs
+                    const bugTypes = ['SyntaxError', 'LogicBug', 'NullPointer'];
+                    for (let i = 0; i < 3; i++) {
+                        const angle = (Math.PI * 2 * i) / 3;
+                        const spawnX = this.x + Math.cos(angle) * 90;
+                        const spawnY = this.y + Math.sin(angle) * 90;
+                        if (game && game.bugs) {
+                            const bugType = bugTypes[i];
+                            game.bugs.push(new Bug(spawnX, spawnY, bugType, game.difficultyLevel));
+                        }
+                    }
+                } else if (this.phase === 3) {
+                    // Phase 3: Spawn 4 powerful bugs
+                    for (let i = 0; i < 4; i++) {
+                        const angle = (Math.PI * 2 * i) / 4;
+                        const spawnX = this.x + Math.cos(angle) * 100;
+                        const spawnY = this.y + Math.sin(angle) * 100;
+                        if (game && game.bugs) {
+                            game.bugs.push(new Bug(spawnX, spawnY, 'MemoryLeak', game.difficultyLevel));
+                        }
+                    }
+                }
+                break;
+        }
+    }
+    
+    takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp < 0) this.hp = 0;
+    }
+    
+    render(ctx) {
+        ctx.save();
+        
+        // Boss size and appearance
+        const size = this.radius;
+        
+        // Boss body (larger and more intimidating)
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x - size, this.y - size/2, size * 2, size);
+        
+        // Boss segments (multiple body parts)
+        for (let i = 0; i < 3; i++) {
+            const segmentSize = size * (0.8 - i * 0.2);
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x - segmentSize, this.y - segmentSize/2 + i * 15, segmentSize * 2, segmentSize);
+        }
+        
+        // Boss legs (more and larger)
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 4;
+        for (let i = 0; i < 6; i++) {
+            const legY = this.y - size/2 + i * 8;
+            ctx.beginPath();
+            ctx.moveTo(this.x - size, legY);
+            ctx.lineTo(this.x - size - 20, legY - 8);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(this.x + size, legY);
+            ctx.lineTo(this.x + size + 20, legY - 8);
+            ctx.stroke();
+        }
+        
+        // Boss eyes (glowing red)
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(this.x - size/2, this.y - size/3, 6, 6);
+        ctx.fillRect(this.x + size/2 - 6, this.y - size/3, 6, 6);
+        
+        // Boss name and type
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.name, this.x, this.y - size - 20);
+        
+        // Health bar (larger for bosses)
+        const barWidth = 80;
+        const barHeight = 6;
+        const healthPercent = this.hp / this.maxHp;
+        
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(this.x - barWidth/2, this.y - size - 35, barWidth, barHeight);
+        ctx.fillStyle = '#00ff00';
+        ctx.fillRect(this.x - barWidth/2, this.y - size - 35, barWidth * healthPercent, barHeight);
+        
+        // HP text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '8px monospace';
+        ctx.fillText(`${this.hp}/${this.maxHp}`, this.x, this.y - size - 40);
+        
+        // Git Boss special effects
+        if (this.type === 'GitBoss') {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px monospace';
+            ctx.fillText(`Phase ${this.phase}/3`, this.x, this.y + size + 25);
+            
+            // Phase-specific visual effects
+            if (this.phase === 3) {
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, size + 10, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
         
         ctx.restore();
     }
