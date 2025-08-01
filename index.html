@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CogniRogue - Debug the World!</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="game-container">
+        <!-- Game Title and Logo -->
+        <div class="title-screen" id="titleScreen">
+            <div class="logo">
+                <h1>COGNI<span class="rogue">ROGUE</span></h1>
+                <p class="subtitle">Debug the World!</p>
+            </div>
+            
+            <div class="story">
+                <p>You are a elite Cognizant developer.</p>
+                <p>The codebase has been infected with bugs!</p>
+                <p>Use your coding skills to debug them all.</p>
+                <p class="challenge">Survive the infinite bug swarm!</p>
+            </div>
+            
+            <div class="controls">
+                <h3>CONTROLS:</h3>
+                <p>WASD or Arrow Keys - Move</p>
+                <p>Auto-attack - Passive debugging</p>
+                <p>Collect XP to level up!</p>
+            </div>
+            
+            <button class="start-btn" onclick="startGame()">START DEBUG SESSION</button>
+            
+            <div class="credits">
+                <p>A Cognizant Developer's Tale</p>
+                <p>Version 1.0 - Debug Build</p>
+            </div>
+        </div>
+
+        <!-- Game Canvas -->
+        <canvas id="gameCanvas" width="1200" height="800" style="display: none;"></canvas>
+        
+        <!-- Game UI Overlay -->
+        <div class="game-ui" id="gameUI" style="display: none;">
+            <div class="stats">
+                <div class="stat">
+                    <span class="label">LEVEL:</span>
+                    <span id="playerLevel">1</span>
+                </div>
+                <div class="stat">
+                    <span class="label">XP:</span>
+                    <span id="playerXP">0</span>/<span id="xpToNext">100</span>
+                </div>
+                <div class="stat">
+                    <span class="label">HP:</span>
+                    <span id="playerHP">100</span>/<span id="maxHP">100</span>
+                </div>
+                <div class="stat">
+                    <span class="label">BUGS FIXED:</span>
+                    <span id="bugsKilled">0</span>
+                </div>
+                <div class="stat">
+                    <span class="label">TIME:</span>
+                    <span id="gameTime">00:00</span>
+                </div>
+            </div>
+            
+            <div class="weapons">
+                <div class="weapon-slot">
+                    <span class="weapon-name">Debug.log()</span>
+                    <span class="weapon-level">Lv.1</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Level Up Screen -->
+        <div class="level-up-screen" id="levelUpScreen" style="display: none;">
+            <h2>LEVEL UP!</h2>
+            <p>Choose your upgrade:</p>
+            <div class="upgrade-options" id="upgradeOptions">
+                <!-- Upgrade options will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div class="game-over-screen" id="gameOverScreen" style="display: none;">
+            <h2>SYSTEM CRASHED!</h2>
+            <div class="final-stats">
+                <p>Level Reached: <span id="finalLevel">1</span></p>
+                <p>Bugs Fixed: <span id="finalBugs">0</span></p>
+                <p>Survival Time: <span id="finalTime">00:00</span></p>
+            </div>
+            <button class="restart-btn" onclick="location.reload()">RESTART DEBUG SESSION</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
