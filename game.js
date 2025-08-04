@@ -1652,9 +1652,16 @@ class Boss {
         }
         this.maxHp = this.hp;
         
-        // Movement pattern
+        // Natural movement system
         this.movePattern = 0;
         this.moveCounter = 0;
+        this.targetX = x;
+        this.targetY = y;
+        this.currentAngle = 0;
+        this.velocityX = 0;
+        this.velocityY = 0;
+        this.behaviorTimer = 0;
+        this.currentBehavior = 'approach';
     }
     
     update(playerX, playerY) {
@@ -1672,72 +1679,168 @@ class Boss {
     }
     
     updateStandardBoss(playerX, playerY) {
-        // Circular movement pattern
-        if (this.moveCounter % 120 < 60) {
-            // Move towards player
-            const dx = playerX - this.x;
-            const dy = playerY - this.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > 0) {
-                this.x += (dx / distance) * this.speed;
-                this.y += (dy / distance) * this.speed;
+        // Natural boss movement with smooth transitions
+        this.behaviorTimer++;
+        
+        const dx = playerX - this.x;
+        const dy = playerY - this.y;
+        const distanceToPlayer = Math.sqrt(dx * dx + dy * dy);
+        
+        // Switch behaviors based on distance and time
+        if (this.behaviorTimer > 180) { // 3 seconds
+            if (distanceToPlayer > 300) {
+                this.currentBehavior = 'approach';
+            } else if (distanceToPlayer < 100) {
+                this.currentBehavior = 'retreat';
+            } else {
+                this.currentBehavior = Math.random() < 0.5 ? 'circle' : 'weave';
             }
-        } else {
-            // Circle around player
-            const angle = (this.moveCounter * 0.05) % (Math.PI * 2);
-            const centerX = playerX;
-            const centerY = playerY;
-            const orbitalRadius = 200;
-            
-            this.x = centerX + Math.cos(angle) * orbitalRadius;
-            this.y = centerY + Math.sin(angle) * orbitalRadius;
+            this.behaviorTimer = 0;
         }
+        
+        let targetVelX = 0, targetVelY = 0;
+        
+        switch(this.currentBehavior) {
+            case 'approach':
+                // Move towards player with slight randomness
+                if (distanceToPlayer > 0) {
+                    targetVelX = (dx / distanceToPlayer) * this.speed;
+                    targetVelY = (dy / distanceToPlayer) * this.speed;
+                    // Add some wobble
+                    targetVelX += (Math.random() - 0.5) * this.speed * 0.3;
+                    targetVelY += (Math.random() - 0.5) * this.speed * 0.3;
+                }
+                break;
+                
+            case 'retreat':
+                // Move away from player
+                if (distanceToPlayer > 0) {
+                    targetVelX = -(dx / distanceToPlayer) * this.speed * 0.7;
+                    targetVelY = -(dy / distanceToPlayer) * this.speed * 0.7;
+                }
+                break;
+                
+            case 'circle':
+                // Smooth circular movement around player
+                this.currentAngle += 0.02;
+                const radius = Math.max(150, distanceToPlayer * 0.8);
+                const idealX = playerX + Math.cos(this.currentAngle) * radius;
+                const idealY = playerY + Math.sin(this.currentAngle) * radius;
+                
+                targetVelX = (idealX - this.x) * 0.05;
+                targetVelY = (idealY - this.y) * 0.05;
+                break;
+                
+            case 'weave':
+                // Weaving pattern towards player
+                const waveOffset = Math.sin(this.moveCounter * 0.1) * 30;
+                const perpX = -dy / distanceToPlayer;
+                const perpY = dx / distanceToPlayer;
+                
+                targetVelX = (dx / distanceToPlayer) * this.speed * 0.5 + perpX * waveOffset * 0.1;
+                targetVelY = (dy / distanceToPlayer) * this.speed * 0.5 + perpY * waveOffset * 0.1;
+                break;
+        }
+        
+        // Smooth velocity transitions (momentum)
+        this.velocityX += (targetVelX - this.velocityX) * 0.1;
+        this.velocityY += (targetVelY - this.velocityY) * 0.1;
+        
+        // Apply velocity with bounds checking
+        this.x += this.velocityX;
+        this.y += this.velocityY;
+        
+        // Keep boss on screen
+        this.x = Math.max(50, Math.min(1150, this.x));
+        this.y = Math.max(50, Math.min(750, this.y));
     }
     
     updateGitBoss(playerX, playerY) {
-        // Git Boss has multiple phases
+        // Git Boss has multiple phases with natural movement
         const healthPercent = this.hp / this.maxHp;
+        this.behaviorTimer++;
+        
+        const dx = playerX - this.x;
+        const dy = playerY - this.y;
+        const distanceToPlayer = Math.sqrt(dx * dx + dy * dy);
+        
+        let targetVelX = 0, targetVelY = 0;
         
         if (healthPercent > 0.66) {
             this.phase = 1;
-            // Phase 1: Slow pursuit
-            const dx = playerX - this.x;
-            const dy = playerY - this.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > 0) {
-                this.x += (dx / distance) * this.speed * 0.5;
-                this.y += (dy / distance) * this.speed * 0.5;
+            // Phase 1: Cautious stalking with periodic retreats
+            if (this.behaviorTimer > 120) {
+                this.currentBehavior = distanceToPlayer < 200 ? 'retreat' : 'stalk';
+                this.behaviorTimer = 0;
             }
+            
+            if (this.currentBehavior === 'retreat') {
+                // Back away while staying in combat range
+                if (distanceToPlayer > 0) {
+                    targetVelX = -(dx / distanceToPlayer) * this.speed * 0.8;
+                    targetVelY = -(dy / distanceToPlayer) * this.speed * 0.8;
+                }
+            } else {
+                // Slow pursuit with side-to-side movement
+                const sideStep = Math.sin(this.moveCounter * 0.05) * 20;
+                const perpX = -dy / distanceToPlayer;
+                const perpY = dx / distanceToPlayer;
+                
+                targetVelX = (dx / distanceToPlayer) * this.speed * 0.3 + perpX * sideStep * 0.02;
+                targetVelY = (dy / distanceToPlayer) * this.speed * 0.3 + perpY * sideStep * 0.02;
+            }
+            
         } else if (healthPercent > 0.33) {
             this.phase = 2;
-            // Phase 2: Erratic movement
-            if (this.moveCounter % 60 === 0) {
-                this.targetX = Math.random() * 1200;
-                this.targetY = Math.random() * 800;
+            // Phase 2: Aggressive but controlled movement
+            if (this.behaviorTimer > 90) {
+                // Pick strategic positions around the player
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 150 + Math.random() * 200;
+                this.targetX = playerX + Math.cos(angle) * distance;
+                this.targetY = playerY + Math.sin(angle) * distance;
+                
+                // Keep targets on screen
+                this.targetX = Math.max(100, Math.min(1100, this.targetX));
+                this.targetY = Math.max(100, Math.min(700, this.targetY));
+                this.behaviorTimer = 0;
             }
             
-            const dx = this.targetX - this.x;
-            const dy = this.targetY - this.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            // Move towards target position with smooth acceleration
+            const targetDx = this.targetX - this.x;
+            const targetDy = this.targetY - this.y;
+            const targetDistance = Math.sqrt(targetDx * targetDx + targetDy * targetDy);
             
-            if (distance > 5) {
-                this.x += (dx / distance) * this.speed * 2;
-                this.y += (dy / distance) * this.speed * 2;
+            if (targetDistance > 10) {
+                targetVelX = (targetDx / targetDistance) * this.speed * 1.5;
+                targetVelY = (targetDy / targetDistance) * this.speed * 1.5;
             }
+            
         } else {
             this.phase = 3;
-            // Phase 3: Desperate charge
-            const dx = playerX - this.x;
-            const dy = playerY - this.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            // Phase 3: Desperate but smart pursuit
+            this.behaviorTimer = 0; // Stay aggressive
             
-            if (distance > 0) {
-                this.x += (dx / distance) * this.speed * 3;
-                this.y += (dy / distance) * this.speed * 3;
-            }
+            // Zigzag charge towards player
+            const zigzag = Math.sin(this.moveCounter * 0.15) * 50;
+            const perpX = -dy / distanceToPlayer;
+            const perpY = dx / distanceToPlayer;
+            
+            targetVelX = (dx / distanceToPlayer) * this.speed * 2.5 + perpX * zigzag * 0.03;
+            targetVelY = (dy / distanceToPlayer) * this.speed * 2.5 + perpY * zigzag * 0.03;
         }
+        
+        // Apply smooth momentum system
+        this.velocityX += (targetVelX - this.velocityX) * 0.15;
+        this.velocityY += (targetVelY - this.velocityY) * 0.15;
+        
+        // Apply movement with screen bounds
+        this.x += this.velocityX;
+        this.y += this.velocityY;
+        
+        // Keep Git Boss on screen with some buffer
+        this.x = Math.max(60, Math.min(1140, this.x));
+        this.y = Math.max(60, Math.min(740, this.y));
     }
     
     attemptAttack(playerX, playerY, game) {
