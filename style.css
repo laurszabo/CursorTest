@@ -136,13 +136,16 @@ body {
     top: 20px;
     left: 20px;
     z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
 }
 
 .stats {
     background: rgba(0, 0, 0, 0.8);
     border: 2px solid #00ff00;
     padding: 15px;
-    margin-bottom: 10px;
+    min-width: 220px;
 }
 
 .stat {
@@ -150,7 +153,6 @@ body {
     justify-content: space-between;
     margin: 5px 0;
     font-size: 10px;
-    min-width: 200px;
 }
 
 .label {
@@ -161,6 +163,7 @@ body {
     background: rgba(0, 0, 0, 0.8);
     border: 2px solid #ffff00;
     padding: 15px;
+    min-width: 220px;
 }
 
 .weapons-title {
@@ -189,14 +192,12 @@ body {
 
 /* Boss UI */
 .boss-ui {
-    position: absolute;
-    top: 20px;
-    right: 20px;
     background: rgba(0, 0, 0, 0.9);
     border: 3px solid #ff4444;
     padding: 20px;
     z-index: 15;
     box-shadow: 0 0 20px #ff4444;
+    min-width: 220px;
 }
 
 .boss-title {
